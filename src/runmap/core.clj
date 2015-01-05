@@ -1,10 +1,17 @@
 (ns runmap.core
   (:use [clojure.java.io :as jio]))
 
+(defn semicircles->degrees [sc]
+  (* sc (/ 180 (Math/pow 2 31))))
+
+(defn degrees->semicircles [dg]
+  (/ dg (/ 180 (Math/pow 2 31))))
+
+(defn runmap-bounds []
+  {:min {:lat (degrees->semicircles 51.323264) :lng (degrees->semicircles -0.396881)} :max {:lat (degrees->semicircles 51.729952) :lng (degrees->semicircles 0.379028)}})
+
 (defn fit-files [dir]
   (filter (memfn isFile) (file-seq (file dir))))
-
-(def ff (first (fit-files "resources/fit-files")))
 
 (defn record-mesg-listener [fn & args]
   (proxy [com.garmin.fit.RecordMesgListener] []
@@ -41,8 +48,8 @@
 
 (defn bounds [lls]
   "bounding box for lat lngs"
-  (let [lats (remove nil? (map :lat lls))
-        lngs (remove nil? (map :lng lls))
+  (let [lats (map :lat lls)
+        lngs (map :lng lls)
         latmin (apply min lats)
         latmax (apply max lats)
         lngmin (apply min lngs)
@@ -56,17 +63,25 @@
         rng (double (- rngmax rngmin))]
     (+ (* (- val dommin) (/ rng dom)) rngmin)))
 
+(defn filter-latlngs [lls bnds]
+  (->> lls
+       (filter #(> (:lat %) (get-in bnds [:min :lat])))
+       (filter #(< (:lat %) (get-in bnds [:max :lat])))
+       (filter #(> (:lng %) (get-in bnds [:min :lng])))
+       (filter #(< (:lng %) (get-in bnds [:max :lng])))))
+
 (defn scale-latlngs [lls x y]
   (let [bnds (bounds lls)
         latdom [(get-in bnds [:min :lat]) (get-in bnds [:max :lat])]
         lngdom [(get-in bnds [:min :lng]) (get-in bnds [:max :lng])]
         latrng [0 x]
         lngrng [0 y]]
-    (map #(vector (scale (:lat %1) latdom latrng) (scale (:lng %1) lngdom lngrng)) lls)))
+    (map #(vector (scale (:lng %1) lngdom lngrng) (scale (:lat %1) latdom latrng)) lls)))
 
 (defn runmap [files dim]
   (let [recs (mapcat record-mesgs files)
         lls (latlngs recs)
+        lls (filter-latlngs lls (runmap-bounds))
         lls (scale-latlngs lls (:x dim) (:y dim))]
     lls))
 
@@ -79,7 +94,7 @@
 (defn -main [& args]
   (let [dir "resources/fit-files"
         files (fit-files dir)
-        dim {:x 2048 :y 2048}
+        dim {:x 1024 :y 1024}
         rm (runmap files dim)
         bmp (runmap->bitmap rm dim)]
     (javax.imageio.ImageIO/write bmp "png" (file "runmap.png"))))
