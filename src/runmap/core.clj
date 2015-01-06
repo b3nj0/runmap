@@ -7,7 +7,7 @@
 (defn degrees->semicircles [dg]
   (/ dg (/ 180 (Math/pow 2 31))))
 
-(defn runmap-bounds []
+(defn runmap-limit []
   {:min {:lat (degrees->semicircles 51.323264) :lng (degrees->semicircles -0.396881)} :max {:lat (degrees->semicircles 51.729952) :lng (degrees->semicircles 0.379028)}})
 
 (defn fit-files [dir]
@@ -33,11 +33,14 @@
     (doall (map #(.addListener brd %) lnrs))
     (.run brd fin)))
 
-(defn record-mesgs [file]
+(defn fit-file->record-mesgs [file]
   "extract RecordMesgs from file"
   (let [msgs (atom [])]
     (parse file [(record-collector msgs)])
     @msgs))
+
+(defn fit-files->record-mesgs [files]
+  (mapcat fit-file->record-mesgs files))
 
 (defn latlngs [recs]
   "extract lat and lngs from seq of RecordMesgs"
@@ -70,31 +73,40 @@
        (filter #(> (:lng %) (get-in bnds [:min :lng])))
        (filter #(< (:lng %) (get-in bnds [:max :lng])))))
 
-(defn scale-latlngs [lls x y]
+(defn runmap-scale [latdom lngdom size]
+  (let [latlen (- (apply max latdom) (apply min latdom))
+        lnglen (- (apply max lngdom) (apply min lngdom))
+        maxlen (max latlen lnglen)]
+    {:y (* 2 size (/ latlen maxlen)) :x (* size (/ lnglen maxlen))}))
+
+(defn scale-latlngs [lls size]
   (let [bnds (bounds lls)
         latdom [(get-in bnds [:min :lat]) (get-in bnds [:max :lat])]
         lngdom [(get-in bnds [:min :lng]) (get-in bnds [:max :lng])]
-        latrng [0 x]
-        lngrng [0 y]]
+        rmscale (runmap-scale latdom lngdom size)
+        latrng [0 (:x rmscale)]
+        lngrng [0 (:y rmscale)]]
     (map #(vector (scale (:lng %1) lngdom lngrng) (scale (:lat %1) latdom latrng)) lls)))
 
-(defn runmap [files dim]
-  (let [recs (mapcat record-mesgs files)
-        lls (latlngs recs)
-        lls (filter-latlngs lls (runmap-bounds))
-        lls (scale-latlngs lls (:x dim) (:y dim))]
+(defn runmap [recs size]
+  (let [lls (latlngs recs)
+        lls (filter-latlngs lls (runmap-limit))
+        lls (scale-latlngs lls size)]
     lls))
 
-(defn runmap->bitmap [rm dim]
-  (let [img (java.awt.image.BufferedImage. (:x dim) (:y dim) java.awt.image.BufferedImage/TYPE_BYTE_GRAY)
+(defn runmap->bitmap [rm]
+  (let [maxx (apply max (map #(get % 0) rm))
+        maxy (apply max (map #(get % 1) rm))
+        img (java.awt.image.BufferedImage. maxx maxy java.awt.image.BufferedImage/TYPE_BYTE_GRAY)
         g (.createGraphics img)]
-    (doall (map (fn [[x y]] (.drawRect g x y 1 1)) rm))
+    (doall (map (fn [[x y]] (.drawRect g x (- maxy y) 1 1)) rm))
     img))
 
 (defn -main [& args]
   (let [dir "resources/fit-files"
         files (fit-files dir)
-        dim {:x 1024 :y 1024}
-        rm (runmap files dim)
-        bmp (runmap->bitmap rm dim)]
+        recs (fit-files->record-mesgs files)
+        size 1024
+        rm (runmap recs size)
+        bmp (runmap->bitmap rm)]
     (javax.imageio.ImageIO/write bmp "png" (file "runmap.png"))))
