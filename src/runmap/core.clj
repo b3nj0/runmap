@@ -21,7 +21,7 @@
     (* earth-radius c)))
 
 (defn runmap-limit []
-  {:min {:lat (degrees->semicircles 51.323264) :lng (degrees->semicircles -0.396881)} :max {:lat (degrees->semicircles 51.729952) :lng (degrees->semicircles 0.379028)}})
+  {:min {:lat 51.323264 :lng -0.396881} :max {:lat 51.729952 :lng 0.379028}})
 
 (defn fit-files [dir]
   (filter (memfn isFile) (file-seq (file dir))))
@@ -60,7 +60,8 @@
   (->> recs
        (map #(assoc {} :lat (.getPositionLat %1) :lng (.getPositionLong %1)))
        (filter (comp not nil? :lat))
-       (filter (comp not nil? :lng))))
+       (filter (comp not nil? :lng))
+       (map #(assoc {} :lat (semicircles->degrees (:lat %1)) :lng (semicircles->degrees (:lng %1))))))
 
 (defn bounds [lls]
   "bounding box for lat lngs"
@@ -90,29 +91,43 @@
   (let [latlen (- (apply max latdom) (apply min latdom))
         lnglen (- (apply max lngdom) (apply min lngdom))
         maxlen (max latlen lnglen)]
-    {:y (* 2 size (/ latlen maxlen)) :x (* size (/ lnglen maxlen))}))
+    {:min {:lat 0 :lng 0} :max {:lat (* size (/ latlen maxlen)) :lng (* size (/ lnglen maxlen))}}))
 
-(defn scale-latlngs [lls size]
+(defn latlngs-domain [lls]
   (let [bnds (bounds lls)
         latdom [(get-in bnds [:min :lat]) (get-in bnds [:max :lat])]
-        lngdom [(get-in bnds [:min :lng]) (get-in bnds [:max :lng])]
+        lngdom [(get-in bnds [:min :lng]) (get-in bnds [:max :lng])]]
+    [latdom lngdom]))
+
+(defn distances [lls]
+  "distances from min (lat lng) to (lat lng)"
+  (let [minll (:min (bounds lls))
+        latdist #(haversine  {:lng (:lng %1) :lat (:lat minll)} %1)
+        lngdist #(haversine  {:lat (:lat %1) :lng (:lng minll)} %1)]
+    (map #(assoc {} :lat (latdist %1) :lng (lngdist %1)) lls)))
+
+
+(defn scale-latlngs [lls size]
+  (let [[latdom lngdom] (latlngs-domain lls)
         rmscale (runmap-scale latdom lngdom size)
-        latrng [0 (:x rmscale)]
-        lngrng [0 (:y rmscale)]]
-    (map #(vector (scale (:lng %1) lngdom lngrng) (scale (:lat %1) latdom latrng)) lls)))
+        latrng [(get-in rmscale [:min :lat]) (get-in rmscale [:max :lat])]
+        lngrng [(get-in rmscale [:min :lng]) (get-in rmscale [:max :lng])]]
+    (map #(assoc {} :lng (scale (:lng %1) lngdom lngrng) :lat (scale (:lat %1) latdom latrng)) lls)))
 
 (defn runmap [recs size]
   (let [lls (latlngs recs)
         lls (filter-latlngs lls (runmap-limit))
+        lls (distances lls)
         lls (scale-latlngs lls size)]
     lls))
 
 (defn runmap->bitmap [rm]
-  (let [maxx (apply max (map #(get % 0) rm))
-        maxy (apply max (map #(get % 1) rm))
+  (let [xys (map #(vector (:lng %) (:lat %)) rm)
+        maxx (apply max (map #(get % 0) xys))
+        maxy (apply max (map #(get % 1) xys))
         img (java.awt.image.BufferedImage. maxx maxy java.awt.image.BufferedImage/TYPE_BYTE_GRAY)
         g (.createGraphics img)]
-    (doall (map (fn [[x y]] (.drawRect g x (- maxy y) 1 1)) rm))
+    (doall (map (fn [[x y]] (.drawRect g x (- maxy y) 1 1)) xys))
     img))
 
 (defn -main [& args]
