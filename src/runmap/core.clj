@@ -7,6 +7,19 @@
 (defn degrees->semicircles [dg]
   (/ dg (/ 180 (Math/pow 2 31))))
 
+(defn degrees->radians [dg]
+  (Math/toRadians dg))
+
+(defn haversine [ll1 ll2]
+  (let [earth-radius 6371
+        lat1 (degrees->radians (:lat ll1))
+        lat2 (degrees->radians (:lat ll2))
+        dellat (degrees->radians (- (:lat ll2) (:lat ll1)))
+        dellng (degrees->radians (- (:lng ll2) (:lng ll1)))
+        a (+ (Math/pow (Math/sin (/ dellat 2)) 2) (* (Math/cos lat1) (Math/cos lat2) (Math/pow (Math/sin (/ dellng 2)) 2)))
+        c (* 2 (Math/atan2 (Math/sqrt a) (Math/sqrt (- 1 a))))]
+    (* earth-radius c)))
+
 (defn runmap-limit []
   {:min {:lat (degrees->semicircles 51.323264) :lng (degrees->semicircles -0.396881)} :max {:lat (degrees->semicircles 51.729952) :lng (degrees->semicircles 0.379028)}})
 
