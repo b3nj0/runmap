@@ -6,9 +6,6 @@
 (defn semicircles->degrees [sc]
   (* sc (/ 180 (Math/pow 2 31))))
 
-(defn degrees->semicircles [dg]
-  (/ dg (/ 180 (Math/pow 2 31))))
-
 (defn degrees->radians [dg]
   (Math/toRadians dg))
 
