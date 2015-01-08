@@ -83,16 +83,16 @@
     (map #(LatLng. (scale (:lat %1) latdom latrng) (scale (:lng %1) lngdom lngrng)) lls)))
 
 (defn runmap [recs size]
-  (let [lls (latlngs recs)
-        lls (latlngs-within lls (runmap-limit))
-        lls (distances lls)
-        lls (scale-latlngs lls size)]
-    lls))
+  (-> recs
+      (latlngs)
+      (latlngs-within (runmap-limit))
+      (distances)
+      (scale-latlngs size)))
 
 (defn runmap->bitmap [rm]
   (let [xys (map #(vector (:lng %) (:lat %)) rm)
-        maxx (apply max (map #(get % 0) xys))
-        maxy (apply max (map #(get % 1) xys))
+        maxx (apply max (map first xys))
+        maxy (apply max (map second xys))
         img (java.awt.image.BufferedImage. maxx maxy java.awt.image.BufferedImage/TYPE_BYTE_GRAY)
         g (.createGraphics img)]
     (doall (map (fn [[x y]] (.drawRect g x (- maxy y) 1 1)) xys))
