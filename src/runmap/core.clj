@@ -48,7 +48,7 @@
         rng (double (- rngmax rngmin))]
     (+ (* (- val dommin) (/ rng dom)) rngmin)))
 
-(defn filter-latlngs [lls bnds]
+(defn latlngs-within [lls bnds]
   (->> lls
        (filter #(> (:lat %) (get-in bnds [:min :lat])))
        (filter #(< (:lat %) (get-in bnds [:max :lat])))
@@ -84,7 +84,7 @@
 
 (defn runmap [recs size]
   (let [lls (latlngs recs)
-        lls (filter-latlngs lls (runmap-limit))
+        lls (latlngs-within lls (runmap-limit))
         lls (distances lls)
         lls (scale-latlngs lls size)]
     lls))
