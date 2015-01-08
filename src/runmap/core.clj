@@ -1,5 +1,6 @@
 (ns runmap.core
-  (:use [clojure.java.io :as jio]))
+  (:require [runmap.fitparser :as fitparser]
+            [clojure.java.io :as jio]))
 
 (defrecord LatLng [lat lng])
 
@@ -21,38 +22,6 @@
 
 (defn runmap-limit []
   {:min (LatLng. 51.323264 -0.396881) :max (LatLng. 51.729952 0.379028)})
-
-(defn fit-files [dir]
-  (filter (memfn isFile) (file-seq (file dir))))
-
-(defn record-mesg-listener [fn & args]
-  (proxy [com.garmin.fit.RecordMesgListener] []
-    (onMesg [m] (apply fn m args))))
-
-(defn collect [msgs f]
-  "add messages transformed by f to msgs"
-  (fn [m]
-    (swap! msgs conj (f m))))
-
-(defn record-collector [msgs]
-  (record-mesg-listener (collect msgs identity)))
-
-(defn parse [file lnrs]
-  "parse file using listeners lnrs"
-  (let [dec (com.garmin.fit.Decode.)
-        brd (com.garmin.fit.MesgBroadcaster. dec)
-        fin (jio/input-stream file)]
-    (doall (map #(.addListener brd %) lnrs))
-    (.run brd fin)))
-
-(defn fit-file->record-mesgs [file]
-  "extract RecordMesgs from file"
-  (let [msgs (atom [])]
-    (parse file [(record-collector msgs)])
-    @msgs))
-
-(defn fit-files->record-mesgs [files]
-  (mapcat fit-file->record-mesgs files))
 
 (defn latlngs [recs]
   "extract lat and lngs from seq of RecordMesgs"
@@ -129,11 +98,14 @@
     (doall (map (fn [[x y]] (.drawRect g x (- maxy y) 1 1)) xys))
     img))
 
+(defn fit-files [dir]
+  (filter (memfn isFile) (file-seq (jio/file dir))))
+
 (defn -main [& args]
   (let [dir "resources/fit-files"
         files (fit-files dir)
-        recs (fit-files->record-mesgs files)
+        recs (fitparser/fit-files->record-mesgs files)
         size 1024
         rm (runmap recs size)
         bmp (runmap->bitmap rm)]
-    (javax.imageio.ImageIO/write bmp "png" (file "runmap.png"))))
+    (javax.imageio.ImageIO/write bmp "png" (jio/file "runmap.png"))))
