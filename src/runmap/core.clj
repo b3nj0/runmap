@@ -1,6 +1,8 @@
 (ns runmap.core
   (:use [clojure.java.io :as jio]))
 
+(defrecord LatLng [lat lng])
+
 (defn semicircles->degrees [sc]
   (* sc (/ 180 (Math/pow 2 31))))
 
@@ -21,7 +23,7 @@
     (* earth-radius c)))
 
 (defn runmap-limit []
-  {:min {:lat 51.323264 :lng -0.396881} :max {:lat 51.729952 :lng 0.379028}})
+  {:min (LatLng. 51.323264 -0.396881) :max (LatLng. 51.729952 0.379028)})
 
 (defn fit-files [dir]
   (filter (memfn isFile) (file-seq (file dir))))
@@ -58,10 +60,10 @@
 (defn latlngs [recs]
   "extract lat and lngs from seq of RecordMesgs"
   (->> recs
-       (map #(assoc {} :lat (.getPositionLat %1) :lng (.getPositionLong %1)))
+       (map #(LatLng. (.getPositionLat %1) (.getPositionLong %1)))
        (filter (comp not nil? :lat))
        (filter (comp not nil? :lng))
-       (map #(assoc {} :lat (semicircles->degrees (:lat %1)) :lng (semicircles->degrees (:lng %1))))))
+       (map #(LatLng. (semicircles->degrees (:lat %1)) (semicircles->degrees (:lng %1))))))
 
 (defn bounds [lls]
   "bounding box for lat lngs"
@@ -71,7 +73,7 @@
         latmax (apply max lats)
         lngmin (apply min lngs)
         lngmax (apply max lngs)]
-    {:min {:lat latmin :lng lngmin} :max {:lat latmax :lng lngmax}}))
+    {:min (LatLng. latmin lngmin) :max (LatLng. latmax lngmax)}))
 
 (defn scale [val domain range]
   (let [[dommin dommax] domain
@@ -91,7 +93,7 @@
   (let [latlen (- (apply max latdom) (apply min latdom))
         lnglen (- (apply max lngdom) (apply min lngdom))
         maxlen (max latlen lnglen)]
-    {:min {:lat 0 :lng 0} :max {:lat (* size (/ latlen maxlen)) :lng (* size (/ lnglen maxlen))}}))
+    {:min (LatLng. 0 0) :max (LatLng. (* size (/ latlen maxlen)) (* size (/ lnglen maxlen)))}))
 
 (defn latlngs-domain [lls]
   (let [bnds (bounds lls)
@@ -102,9 +104,9 @@
 (defn distances [lls]
   "distances from min (lat lng) to (lat lng)"
   (let [minll (:min (bounds lls))
-        latdist #(haversine  {:lng (:lng %1) :lat (:lat minll)} %1)
-        lngdist #(haversine  {:lat (:lat %1) :lng (:lng minll)} %1)]
-    (map #(assoc {} :lat (latdist %1) :lng (lngdist %1)) lls)))
+        latdist #(haversine (LatLng. (:lat minll) (:lng %1)) %1)
+        lngdist #(haversine (LatLng. (:lat %1) (:lng minll)) %1)]
+    (map #(LatLng. (latdist %1) (lngdist %1)) lls)))
 
 
 (defn scale-latlngs [lls size]
@@ -112,7 +114,7 @@
         rmscale (runmap-scale latdom lngdom size)
         latrng [(get-in rmscale [:min :lat]) (get-in rmscale [:max :lat])]
         lngrng [(get-in rmscale [:min :lng]) (get-in rmscale [:max :lng])]]
-    (map #(assoc {} :lng (scale (:lng %1) lngdom lngrng) :lat (scale (:lat %1) latdom latrng)) lls)))
+    (map #(LatLng. (scale (:lat %1) latdom latrng) (scale (:lng %1) lngdom lngrng)) lls)))
 
 (defn runmap [recs size]
   (let [lls (latlngs recs)
