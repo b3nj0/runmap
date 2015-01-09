@@ -44,38 +44,36 @@
        (filter #(> (:lng %) (get-in bnds [:min :lng])))
        (filter #(< (:lng %) (get-in bnds [:max :lng])))))
 
-(defn runmap-scale [latdom lngdom size]
-  (let [latlen (- (apply max latdom) (apply min latdom))
-        lnglen (- (apply max lngdom) (apply min lngdom))
-        maxlen (max latlen lnglen)]
-    {:min (LatLng. 0 0) :max (LatLng. (* size (/ latlen maxlen)) (* size (/ lnglen maxlen)))}))
-
 (defn latlngs-domain [lls]
   (let [bnds (bounds lls)
         latdom [(get-in bnds [:min :lat]) (get-in bnds [:max :lat])]
         lngdom [(get-in bnds [:min :lng]) (get-in bnds [:max :lng])]]
     [latdom lngdom]))
 
-(defn distances [lls]
-  "distances from min (lat lng) to (lat lng)"
-  (let [minll (:min (bounds lls))
-        latdist #(haversine (LatLng. (:lat minll) (:lng %1)) %1)
-        lngdist #(haversine (LatLng. (:lat %1) (:lng minll)) %1)]
-    (map #(LatLng. (latdist %1) (lngdist %1)) lls)))
-
-
-(defn scale-latlngs [lls size]
+(defn runmap-scale [lls size]
   (let [[latdom lngdom] (latlngs-domain lls)
-        rmscale (runmap-scale latdom lngdom size)
-        latrng [(get-in rmscale [:min :lat]) (get-in rmscale [:max :lat])]
-        lngrng [(get-in rmscale [:min :lng]) (get-in rmscale [:max :lng])]]
+        latlen (- (apply max latdom) (apply min latdom))
+        lnglen (- (apply max lngdom) (apply min lngdom))
+        maxlen (max latlen lnglen)]
+    {:min (LatLng. 0 0) :max (LatLng. (* size (/ latlen maxlen)) (* size (/ lnglen maxlen)))}))
+
+(defn distances-scale [lls]
+  (let [minll (:min (bounds lls))
+        maxll (:max (bounds lls))
+        latdist (haversine minll (LatLng. (:lat maxll) (:lng minll)))
+        lngdist (haversine minll (LatLng. (:lat minll) (:lng maxll)))]
+    {:min (LatLng. 0 0) :max (LatLng. latdist lngdist)}))
+
+(defn scale-latlngs [lls scl]
+  (let [[latdom lngdom] (latlngs-domain lls)
+        latrng [(get-in scl [:min :lat]) (get-in scl [:max :lat])]
+        lngrng [(get-in scl [:min :lng]) (get-in scl [:max :lng])]]
     (map #(LatLng. (scale (:lat %1) latdom latrng) (scale (:lng %1) lngdom lngrng)) lls)))
 
 (defn runmap [lls size]
-  (-> lls
-      (latlngs-within (runmap-limit))
-      (distances)
-      (scale-latlngs size)))
+  (let [lls (latlngs-within lls (runmap-limit))
+        lls (scale-latlngs lls (distances-scale lls))]
+    (scale-latlngs lls (runmap-scale lls size))))
 
 (defn runmap->bitmap [rm]
   (let [xys (map #(vector (:lng %) (:lat %)) rm)
