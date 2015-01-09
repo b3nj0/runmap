@@ -4,9 +4,6 @@
 
 (defrecord LatLng [lat lng])
 
-(defn semicircles->degrees [sc]
-  (* sc (/ 180 (Math/pow 2 31))))
-
 (defn degrees->radians [dg]
   (Math/toRadians dg))
 
@@ -22,14 +19,6 @@
 
 (defn runmap-limit []
   {:min (LatLng. 51.323264 -0.396881) :max (LatLng. 51.729952 0.379028)})
-
-(defn latlngs [recs]
-  "extract lat and lngs from seq of RecordMesgs"
-  (->> recs
-       (map #(LatLng. (.getPositionLat %1) (.getPositionLong %1)))
-       (filter (comp not nil? :lat))
-       (filter (comp not nil? :lng))
-       (map #(LatLng. (semicircles->degrees (:lat %1)) (semicircles->degrees (:lng %1))))))
 
 (defn bounds [lls]
   "bounding box for lat lngs"
@@ -82,9 +71,8 @@
         lngrng [(get-in rmscale [:min :lng]) (get-in rmscale [:max :lng])]]
     (map #(LatLng. (scale (:lat %1) latdom latrng) (scale (:lng %1) lngdom lngrng)) lls)))
 
-(defn runmap [recs size]
-  (-> recs
-      (latlngs)
+(defn runmap [lls size]
+  (-> lls
       (latlngs-within (runmap-limit))
       (distances)
       (scale-latlngs size)))
@@ -104,8 +92,8 @@
 (defn -main [& args]
   (let [dir "resources/fit-files"
         files (fit-files dir)
-        recs (fitparser/fit-files->record-mesgs files)
+        lls (fitparser/fit-files->latlngs files)
         size 1024
-        rm (runmap recs size)
+        rm (runmap lls size)
         bmp (runmap->bitmap rm)]
     (javax.imageio.ImageIO/write bmp "png" (jio/file "runmap.png"))))

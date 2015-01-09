@@ -31,3 +31,16 @@
 
 (defn fit-files->record-mesgs [files]
   (mapcat fit-file->record-mesgs files))
+
+(defn semicircles->degrees [sc]
+  (* sc (/ 180 (Math/pow 2 31))))
+
+(defn record-mesgs->latlngs [recs]
+  (->> recs
+       (map #(assoc {} :lat (.getPositionLat %1) :lng (.getPositionLong %1)))
+       (filter (comp not nil? :lat))
+       (filter (comp not nil? :lng))
+       (map #(assoc {} :lat  (semicircles->degrees (:lat %1)) :lng (semicircles->degrees (:lng %1))))))
+
+(defn fit-files->latlngs [files]
+  (record-mesgs->latlngs (fit-files->record-mesgs files)))
