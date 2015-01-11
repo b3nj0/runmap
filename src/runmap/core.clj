@@ -1,5 +1,6 @@
 (ns runmap.core
   (:require [runmap.fitparser :as fitparser]
+            [runmap.gpxparser :as gpxparser]
             [clojure.java.io :as jio]))
 
 (defrecord LatLng [lat lng])
@@ -72,8 +73,8 @@
 
 (defn runmap [lls size]
   (let [lls (latlngs-within lls (runmap-limit))
-        lls (scale-latlngs lls (distances-scale lls))]
-    (scale-latlngs lls (runmap-scale lls size))))
+        lls (scale-latlngs lls (distances-scale lls))])
+  (scale-latlngs lls (runmap-scale lls size)))
 
 (defn runmap->bitmap [rm]
   (let [xys (map #(vector (:lng %) (:lat %)) rm)
@@ -84,14 +85,14 @@
     (doall (map (fn [[x y]] (.drawRect g x (- maxy y) 1 1)) xys))
     img))
 
-(defn fit-files [dir]
+(defn run-file-seq [dir]
   (filter (memfn isFile) (file-seq (jio/file dir))))
 
 (defn -main [& args]
-  (let [dir "resources/fit-files"
-        files (fit-files dir)
-        lls (fitparser/fit-files->latlngs files)
-        size 1024
+  (let [dir "resources/gpx-files"
+        files (run-file-seq dir)
+        lls (gpxparser/files->latlngs files)
+        size 4096
         rm (runmap lls size)
         bmp (runmap->bitmap rm)]
     (javax.imageio.ImageIO/write bmp "png" (jio/file "runmap.png"))))

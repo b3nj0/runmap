@@ -1,6 +1,8 @@
 (ns runmap.fitparser
   (:require [clojure.java.io :as jio]))
 
+(def ext ".fit")
+
 ;; parsing fit files
 
 (defn record-mesg-listener [fn & args]
@@ -42,5 +44,5 @@
        (filter (comp not nil? :lng))
        (map #(assoc {} :lat  (semicircles->degrees (:lat %1)) :lng (semicircles->degrees (:lng %1))))))
 
-(defn fit-files->latlngs [files]
+(defn files->latlngs [files]
   (record-mesgs->latlngs (fit-files->record-mesgs files)))
